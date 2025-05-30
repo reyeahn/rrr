@@ -1,4 +1,4 @@
-# MusicConnect
+# Resonate
 
 A social music sharing platform where users can post their daily songs, discover new music, and connect with others who share similar musical tastes.
 
