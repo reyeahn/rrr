@@ -1,0 +1,14 @@
+<svg width="300" height="300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="albumGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="300" height="300" fill="url(#albumGradient)"/>
+  <circle cx="150" cy="150" r="120" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+  <circle cx="150" cy="150" r="80" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+  <circle cx="150" cy="150" r="40" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+  <circle cx="150" cy="150" r="15" fill="rgba(255,255,255,0.6)"/>
+  <path d="M120 120 L180 120 L180 140 L160 150 L160 170 L140 170 L140 150 Z" fill="rgba(255,255,255,0.7)"/>
+</svg> 
