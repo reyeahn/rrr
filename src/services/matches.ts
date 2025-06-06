@@ -13,10 +13,11 @@ import {
   addDoc,
   Timestamp,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  limit
 } from 'firebase/firestore';
 import { db } from '@/services/firebase';
-import { getLastResetTime } from './timeUtils';
+import { getLastResetTime, getPacificTime } from './timeUtils';
 import { getUserPosts } from './posts';
 import { getUserFriends } from './friends';
 
@@ -52,6 +53,8 @@ export interface MatchedUserPost {
   createdAt: Date;
   matchId: string;
   matchedAt: Date;
+  mediaUrl?: string;
+  mediaUrls?: string[];
 }
 
 export interface Message {
@@ -129,7 +132,32 @@ export const getUserMatches = async (userId: string): Promise<Match[]> => {
         userIds: matchData.userIds,
         users,
         createdAt: matchData.createdAt?.toDate() || new Date(),
-        lastMessage: matchData.lastMessage?.toDate() || matchData.lastMessageAt?.toDate(),
+        lastMessage: (() => {
+          // Safely handle lastMessage conversion
+          if (!matchData.lastMessage && !matchData.lastMessageAt) return undefined;
+          
+          const lastMsg = matchData.lastMessage || matchData.lastMessageAt;
+          
+          // If it's already a Date object, return it
+          if (lastMsg instanceof Date) return lastMsg;
+          
+          // If it's a Firestore Timestamp, convert it
+          if (lastMsg && typeof lastMsg.toDate === 'function') {
+            return lastMsg.toDate();
+          }
+          
+          // If it's a string or other format, try to create a Date
+          if (lastMsg) {
+            try {
+              return new Date(lastMsg);
+            } catch (e) {
+              console.warn('Could not convert lastMessage to Date:', lastMsg);
+              return undefined;
+            }
+          }
+          
+          return undefined;
+        })(),
         isActive: matchData.isActive !== false // Default to true if not specified
       });
     }
@@ -193,7 +221,9 @@ export const getMatchedUsersPosts = async (userId: string): Promise<MatchedUserP
           comments: post.comments,
           createdAt: post.createdAt?.toDate?.() || post.createdAt,
           matchId: match.id,
-          matchedAt: match.createdAt
+          matchedAt: match.createdAt,
+          mediaUrl: post.mediaUrl,
+          mediaUrls: post.mediaUrls
         });
       }
     }
@@ -269,8 +299,8 @@ export const createMatch = async (userId1: string, userId2: string): Promise<str
           bio: user2Data.bio
         }
       },
-      createdAt: new Date(),
-      lastMessage: new Date(),
+      createdAt: getPacificTime(),
+      lastMessage: getPacificTime(),
       isActive: true
     };
 
@@ -314,7 +344,32 @@ export const getMatchById = async (matchId: string): Promise<Match | null> => {
       userIds: matchData.userIds,
       users,
       createdAt: matchData.createdAt?.toDate() || new Date(),
-      lastMessage: matchData.lastMessage?.toDate(),
+      lastMessage: (() => {
+        // Safely handle lastMessage conversion
+        if (!matchData.lastMessage && !matchData.lastMessageAt) return undefined;
+        
+        const lastMsg = matchData.lastMessage || matchData.lastMessageAt;
+        
+        // If it's already a Date object, return it
+        if (lastMsg instanceof Date) return lastMsg;
+        
+        // If it's a Firestore Timestamp, convert it
+        if (lastMsg && typeof lastMsg.toDate === 'function') {
+          return lastMsg.toDate();
+        }
+        
+        // If it's a string or other format, try to create a Date
+        if (lastMsg) {
+          try {
+            return new Date(lastMsg);
+          } catch (e) {
+            console.warn('Could not convert lastMessage to Date:', lastMsg);
+            return undefined;
+          }
+        }
+        
+        return undefined;
+      })(),
       isActive: matchData.isActive
     };
   } catch (error) {
@@ -333,7 +388,7 @@ export const getMatchStats = async (userId: string): Promise<{
 }> => {
   try {
     const matches = await getUserMatches(userId);
-    const now = new Date();
+    const now = getPacificTime();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     const activeMatches = matches.filter(match => match.isActive);

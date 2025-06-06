@@ -7,9 +7,11 @@ import {
   getDoc,
   updateDoc,
   orderBy,
-  limit
+  limit,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from '@/services/firebase';
+import { getLastResetTime, getPacificTime } from './timeUtils';
 
 // Interfaces for the matching algorithm
 interface UserProfile {
@@ -63,6 +65,8 @@ interface PostWithMetadata {
   mood: string;
   moodTags?: string[];
   caption?: string;
+  mediaUrl?: string; // Single photo for backward compatibility
+  mediaUrls?: string[]; // Multiple photos
   createdAt: Date;
   matchScore?: number; // calculated by algorithm
 }
@@ -180,9 +184,12 @@ const calculateTextSimilarity = (text1: string, text2: string): number => {
 
 /**
  * Updates user music preferences based on their engagement patterns
+ * This is a background operation that may be blocked by ad blockers - handle gracefully
  */
 export const updateUserMusicPreferences = async (userId: string): Promise<void> => {
   try {
+    console.log(`🎵 Starting music preference update for user: ${userId}`);
+    
     // Get user's liked posts and engagement history
     const swipesQuery = query(
       collection(db, 'swipes'),
@@ -197,18 +204,33 @@ export const updateUserMusicPreferences = async (userId: string): Promise<void> 
       likedPostIds.push(doc.data().postId);
     });
 
-    if (likedPostIds.length === 0) return;
+    console.log(`📊 Found ${likedPostIds.length} liked posts for preference analysis`);
+    
+    if (likedPostIds.length === 0) {
+      console.log('📊 No liked posts found - skipping preference update');
+      return;
+    }
 
     // Fetch full post data for liked posts
     const audioFeatures: any[] = [];
     const genres: string[] = [];
     const moodTags: string[] = [];
+    let processedPosts = 0;
 
     for (const postId of likedPostIds.slice(-20)) { // Last 20 liked posts
       try {
         const postDoc = await getDoc(doc(db, 'posts', postId));
         if (postDoc.exists()) {
           const postData = postDoc.data();
+          
+          console.log(`📊 Analyzing post ${postId}:`, {
+            hasAudioFeatures: !!postData.song?.audioFeatures,
+            hasGenres: !!postData.song?.genres,
+            genres: postData.song?.genres || [],
+            hasMoodTags: !!postData.moodTags,
+            moodTags: postData.moodTags || [],
+            mood: postData.mood
+          });
           
           if (postData.song?.audioFeatures) {
             audioFeatures.push(postData.song.audioFeatures);
@@ -221,11 +243,16 @@ export const updateUserMusicPreferences = async (userId: string): Promise<void> 
           if (postData.moodTags) {
             moodTags.push(...postData.moodTags);
           }
+          
+          processedPosts++;
         }
       } catch (error) {
         console.error(`Error fetching post ${postId}:`, error);
       }
     }
+
+    console.log(`📊 Processed ${processedPosts} posts for preference calculation`);
+    console.log(`📊 Found ${audioFeatures.length} audio features, ${genres.length} genres, ${moodTags.length} mood tags`);
 
     // Calculate average preferences from liked content
     const preferences = {
@@ -234,15 +261,65 @@ export const updateUserMusicPreferences = async (userId: string): Promise<void> 
       moodTags: [...new Set(moodTags)]
     };
 
+    console.log(`📊 Calculated preferences:`, {
+      uniqueGenres: preferences.genres.length,
+      audioFeatures: preferences.audioFeatures,
+      uniqueMoodTags: preferences.moodTags.length
+    });
+
     // Update user document with calculated preferences
     const userRef = doc(db, 'users', userId);
     await updateDoc(userRef, {
       musicPreferences: preferences,
-      lastPreferencesUpdate: new Date()
+      lastPreferencesUpdate: getPacificTime()
     });
 
+    console.log(`✅ Successfully updated music preferences for user: ${userId}`);
+
+  } catch (error: any) {
+    // Check if this is a network blocking error
+    if (error.message?.includes('ERR_BLOCKED_BY_CLIENT') || 
+        error.code === 'ERR_BLOCKED_BY_CLIENT' ||
+        error.toString().includes('blocked')) {
+      console.warn('⚠️ User preference update blocked by ad blocker - this is non-critical and will be retried later');
+    } else {
+      console.error('❌ Error updating user music preferences:', error);
+    }
+    // Don't throw the error - this is a background operation that shouldn't break the main flow
+  }
+};
+
+/**
+ * Get current user music preferences for testing/debugging
+ */
+export const getUserMusicPreferences = async (userId: string): Promise<any> => {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    if (!userDoc.exists()) return null;
+    
+    const userData = userDoc.data();
+    return {
+      musicPreferences: userData.musicPreferences || null,
+      lastPreferencesUpdate: userData.lastPreferencesUpdate?.toDate?.() || userData.lastPreferencesUpdate || null,
+      hasPreferences: !!userData.musicPreferences
+    };
   } catch (error) {
-    console.error('Error updating user music preferences:', error);
+    console.error('Error getting user music preferences:', error);
+    return null;
+  }
+};
+
+/**
+ * Manually trigger preference update (for testing)
+ */
+export const triggerPreferenceUpdate = async (userId: string): Promise<boolean> => {
+  try {
+    console.log(`🔄 Manually triggering preference update for user: ${userId}`);
+    await updateUserMusicPreferences(userId);
+    return true;
+  } catch (error) {
+    console.error('Error manually triggering preference update:', error);
+    return false;
   }
 };
 
@@ -290,8 +367,17 @@ const calculateAverageAudioFeatures = (features: any[]): any => {
  */
 export const getIntelligentMatches = async (userId: string): Promise<PostWithMetadata[]> => {
   try {
-    // First, ensure user preferences are up to date
-    await updateUserMusicPreferences(userId);
+    // First, try to update user preferences (background operation - may be blocked)
+    try {
+      await updateUserMusicPreferences(userId);
+    } catch (error: any) {
+      // Silently handle preference update failures - don't block the main matching
+      if (error.message?.includes('ERR_BLOCKED_BY_CLIENT') || error.toString().includes('blocked')) {
+        console.warn('⚠️ Background preference update blocked - continuing with existing preferences');
+      } else {
+        console.warn('⚠️ Background preference update failed - continuing with existing preferences:', error);
+      }
+    }
 
     // Get current user profile
     const userDoc = await getDoc(doc(db, 'users', userId));
@@ -339,9 +425,12 @@ export const getIntelligentMatches = async (userId: string): Promise<PostWithMet
     });
 
     // Get all recent posts (excluding user's own and already swiped)
+    // Only get ACTIVE posts from the last 24-hour window (after 9 AM PT reset)
+    const lastReset = getLastResetTime();
     const postsQuery = query(
       collection(db, 'posts'),
       where('userId', '!=', userId),
+      where('createdAt', '>', Timestamp.fromDate(lastReset)),
       orderBy('userId'),
       orderBy('createdAt', 'desc'),
       limit(100) // Get more posts to have options for intelligent selection
@@ -350,21 +439,36 @@ export const getIntelligentMatches = async (userId: string): Promise<PostWithMet
     const postsSnapshot = await getDocs(postsQuery);
     const candidatePosts: PostWithMetadata[] = [];
 
+    console.log(`📊 Found ${postsSnapshot.docs.length} posts from database query`);
+    console.log(`📊 Already swiped on ${swipedPostIds.length} posts`);
+
     // Filter and score posts
+    let processedCount = 0;
+    let skippedAlreadySwiped = 0;
+    let skippedExcludedUsers = 0;
+    let skippedMissingAuthor = 0;
+    
     for (const postDoc of postsSnapshot.docs) {
-      if (swipedPostIds.includes(postDoc.id)) continue; // Skip already swiped
+      if (swipedPostIds.includes(postDoc.id)) {
+        skippedAlreadySwiped++;
+        continue; // Skip already swiped
+      }
 
       const postData = postDoc.data();
       
       // EXCLUDE posts from friends and matched users
       if (excludedUserIds.includes(postData.userId)) {
         console.log(`Excluding post from ${postData.userId} (friend/match)`);
+        skippedExcludedUsers++;
         continue;
       }
 
       // Get the post author's profile for compatibility scoring
       const authorDoc = await getDoc(doc(db, 'users', postData.userId));
-      if (!authorDoc.exists()) continue;
+      if (!authorDoc.exists()) {
+        skippedMissingAuthor++;
+        continue;
+      }
 
       const authorProfile: UserProfile = {
         uid: postData.userId,
@@ -415,19 +519,40 @@ export const getIntelligentMatches = async (userId: string): Promise<PostWithMet
         mood: postData.mood,
         moodTags: postData.moodTags,
         caption: postData.caption,
+        mediaUrl: postData.mediaUrl,
+        mediaUrls: postData.mediaUrls,
         createdAt: postData.createdAt?.toDate() || new Date(),
         matchScore
       });
+      
+      processedCount++;
     }
+
+    console.log(`📊 Processing summary:`);
+    console.log(`  - Posts processed: ${processedCount}`);
+    console.log(`  - Skipped (already swiped): ${skippedAlreadySwiped}`);
+    console.log(`  - Skipped (excluded users): ${skippedExcludedUsers}`);
+    console.log(`  - Skipped (missing author): ${skippedMissingAuthor}`);
+    console.log(`  - Final candidate posts: ${candidatePosts.length}`);
 
     // Sort by match score and return top 15
     candidatePosts.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
     
-    return candidatePosts.slice(0, 15);
+    const finalPosts = candidatePosts.slice(0, 15);
+    console.log(`📊 Returning ${finalPosts.length} posts for discover feed`);
+    
+    return finalPosts;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting intelligent matches:', error);
-    throw error;
+    
+    // Check if this is a blocking error and provide helpful info
+    if (error.message?.includes('ERR_BLOCKED_BY_CLIENT') || error.toString().includes('blocked')) {
+      console.warn('⚠️ Intelligent matching blocked by ad blocker - falling back to basic posts');
+    }
+    
+    // Return empty array instead of throwing - let the discover page handle fallback
+    return [];
   }
 };
 

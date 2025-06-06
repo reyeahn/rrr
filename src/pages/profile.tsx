@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/services/firebase';
+import { db, handleFirestoreError } from '@/services/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { FaUser, FaCog, FaEdit, FaSignOutAlt, FaMusic, FaHeart, FaComment, FaRegHeart, FaLock, FaGlobe, FaChartLine } from 'react-icons/fa';
+import { FaUser, FaCog, FaEdit, FaSignOutAlt, FaMusic, FaHeart, FaComment, FaRegHeart, FaLock, FaGlobe, FaChartLine, FaPhone } from 'react-icons/fa';
 import { getUserProfilePosts } from '@/services/posts';
 import { likePost, addComment, getPostComments } from '@/services/posts';
 import NotificationBadge from '@/components/common/NotificationBadge';
@@ -11,6 +11,7 @@ import { getUnreadNotifications } from '@/services/notifications';
 import ClickableAlbumCover from '@/components/spotify/ClickableAlbumCover';
 import { formatPostDate } from '@/services/timeUtils';
 import WeeklyInsights from '@/components/analytics/WeeklyInsights';
+import PhotoCarousel from '@/components/PhotoCarousel';
 
 interface Post {
   id: string;
@@ -28,6 +29,8 @@ interface Post {
   comments: number;
   createdAt: Date;
   likedBy?: string[];
+  mediaUrl?: string; // Keep for backward compatibility
+  mediaUrls?: string[]; // New field for multiple photos
 }
 
 const Profile: React.FC = () => {
@@ -134,9 +137,60 @@ const Profile: React.FC = () => {
       });
       
       setIsEditing(false);
-    } catch (error) {
+      
+      // Show success message
+      const successMessage = document.createElement('div');
+      successMessage.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      successMessage.textContent = 'Profile updated successfully!';
+      document.body.appendChild(successMessage);
+      setTimeout(() => {
+        if (successMessage.parentElement) {
+          successMessage.parentElement.removeChild(successMessage);
+        }
+      }, 3000);
+      
+    } catch (error: any) {
       console.error('Error updating profile:', error);
-      alert('Failed to update profile. Please try again.');
+      
+      // Use the enhanced error handler
+      const errorType = handleFirestoreError(error, 'profile update');
+      
+      if (errorType === 'blocked') {
+        // Ad blocker notification already shown by handleFirestoreError
+        return;
+      }
+      
+      // Show error for other types of failures
+      let errorMessage = 'Failed to update profile. ';
+      
+      if (error.code === 'permission-denied') {
+        errorMessage += 'Permission denied. Please refresh the page and try again.';
+      } else if (error.code === 'unavailable') {
+        errorMessage += 'Service temporarily unavailable. Please check your internet connection and try again.';
+      } else {
+        errorMessage += 'Please try again. If the problem persists, try refreshing the page.';
+      }
+      
+      // Show error dialog for non-ad-blocker errors
+      const errorDialog = document.createElement('div');
+      errorDialog.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+      errorDialog.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-md mx-4">
+          <h3 class="text-lg font-bold text-red-600 mb-2">Profile Update Failed</h3>
+          <p class="text-gray-700 dark:text-gray-300 mb-4">${errorMessage}</p>
+          <div class="flex gap-2">
+            <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                    class="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700">
+              OK
+            </button>
+            <button onclick="window.location.reload()" 
+                    class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(errorDialog);
     } finally {
       setIsSaving(false);
     }
@@ -573,6 +627,27 @@ const Profile: React.FC = () => {
                   {post.caption && (
                     <p className="text-gray-700 dark:text-gray-300 mb-4">{post.caption}</p>
                   )}
+
+                  {/* Photo carousel if multiple photos exist, or single photo */}
+                  {(post.mediaUrls && post.mediaUrls.length > 0) ? (
+                    <div className="mb-4 rounded-lg overflow-hidden h-40">
+                      <PhotoCarousel
+                        mediaUrls={post.mediaUrls}
+                        className="w-full h-full rounded-lg"
+                        showCounter={true}
+                        counterPosition="top-right"
+                        showNavigation={true}
+                      />
+                    </div>
+                  ) : post.mediaUrl ? (
+                    <div className="mb-4 rounded-lg overflow-hidden">
+                      <img
+                        src={post.mediaUrl}
+                        alt="Attached media"
+                        className="w-full h-40 object-cover rounded-lg"
+                      />
+                    </div>
+                  ) : null}
 
                   <div className="flex items-center gap-6 mb-4">
                     <button

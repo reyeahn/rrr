@@ -4,7 +4,7 @@ import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion } from 'fir
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/services/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { FaMusic, FaSearch, FaCamera, FaSpotify } from 'react-icons/fa';
+import { FaMusic, FaSearch, FaCamera, FaSpotify, FaTimes, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import { createPost } from '@/services/posts';
 import { getAudioFeatures, SpotifyAudioFeatures } from '@/services/spotify';
 import SpotifyPlayer from '@/components/spotify/SpotifyPlayer';
@@ -26,8 +26,9 @@ const PostSong: React.FC = () => {
   const [caption, setCaption] = useState('');
   const [mood, setMood] = useState('');
   const [moodCategory, setMoodCategory] = useState('');
-  const [mediaFile, setMediaFile] = useState<File | null>(null);
-  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
+  const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingAudioFeatures, setIsFetchingAudioFeatures] = useState(false);
@@ -209,31 +210,51 @@ const PostSong: React.FC = () => {
   };
 
   const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
+    if (e.target.files && e.target.files.length > 0) {
+      const files = Array.from(e.target.files);
       
-      // Check if file is an image
-      if (!file.type.startsWith('image/')) {
-        alert('Please upload an image file');
+      // Check if we already have files and limit to 5 total
+      if (mediaFiles.length + files.length > 5) {
+        alert('You can only upload up to 5 photos');
         return;
       }
       
-      // Check file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('File size exceeds 5MB');
+      // Check if files are images
+      if (!files.every(file => file.type.startsWith('image/'))) {
+        alert('Please upload image files only');
         return;
       }
       
-      setMediaFile(file);
-      setMediaPreview(URL.createObjectURL(file));
+      // Check file sizes (max 5MB each)
+      if (files.some(file => file.size > 5 * 1024 * 1024)) {
+        alert('One or more files exceed 5MB');
+        return;
+      }
+      
+      // Add to existing files
+      const newMediaFiles = [...mediaFiles, ...files];
+      const newMediaPreviews = [...mediaPreviews, ...files.map(file => URL.createObjectURL(file))];
+      
+      setMediaFiles(newMediaFiles);
+      setMediaPreviews(newMediaPreviews);
     }
   };
 
-  const handleRemoveMedia = () => {
-    setMediaFile(null);
-    if (mediaPreview) {
-      URL.revokeObjectURL(mediaPreview);
-      setMediaPreview(null);
+  const handleRemoveMedia = (index: number) => {
+    const newMediaFiles = mediaFiles.filter((_, i) => i !== index);
+    const newMediaPreviews = mediaPreviews.filter((_, i) => i !== index);
+    
+    // Revoke URL for removed preview
+    URL.revokeObjectURL(mediaPreviews[index]);
+    
+    setMediaFiles(newMediaFiles);
+    setMediaPreviews(newMediaPreviews);
+    
+    // Adjust current index if needed
+    if (currentPhotoIndex >= newMediaFiles.length && newMediaFiles.length > 0) {
+      setCurrentPhotoIndex(newMediaFiles.length - 1);
+    } else if (newMediaFiles.length === 0) {
+      setCurrentPhotoIndex(0);
     }
   };
 
@@ -248,7 +269,7 @@ const PostSong: React.FC = () => {
     
     setIsSubmitting(true);
     setError(null);
-    let mediaUrl = '';
+    let mediaUrls = [];
     let audioFeatures: SpotifyAudioFeatures | null = null;
     
     try {
@@ -282,30 +303,37 @@ const PostSong: React.FC = () => {
         console.log('🎵 No Spotify ID available, skipping audio features');
       }
       
-      // Upload media file if exists
-      if (mediaFile) {
-        console.log('Uploading media file...');
-        const storageRef = ref(storage, `posts/${user.uid}/${Date.now()}_${mediaFile.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, mediaFile);
+      // Upload media files if exists
+      if (mediaFiles.length > 0) {
+        console.log('Uploading media files...');
         
-        // Set up upload progress monitoring
-        uploadTask.on(
-          'state_changed',
-          (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            setUploadProgress(progress);
-          },
-          (error) => {
-            console.error('Upload error:', error);
-            setError('Failed to upload media');
-            setIsSubmitting(false);
-          }
-        );
+        for (let i = 0; i < mediaFiles.length; i++) {
+          const file = mediaFiles[i];
+          const storageRef = ref(storage, `posts/${user.uid}/${Date.now()}_${file.name}_${i}`);
+          const uploadTask = uploadBytesResumable(storageRef, file);
+          
+          // Set up upload progress monitoring
+          uploadTask.on(
+            'state_changed',
+            (snapshot) => {
+              const progress = ((i + (snapshot.bytesTransferred / snapshot.totalBytes)) / mediaFiles.length) * 100;
+              setUploadProgress(progress);
+            },
+            (error) => {
+              console.error('Upload error:', error);
+              setError('Failed to upload media');
+              setIsSubmitting(false);
+              return;
+            }
+          );
+          
+          // Wait for upload to complete
+          await uploadTask;
+          const downloadURL = await getDownloadURL(storageRef);
+          mediaUrls.push(downloadURL);
+        }
         
-        // Wait for upload to complete
-        await uploadTask;
-        mediaUrl = await getDownloadURL(storageRef);
-        console.log('Media uploaded successfully:', mediaUrl);
+        console.log('Media uploaded successfully:', mediaUrls);
       }
       
       // Create the song object with all available data
@@ -349,7 +377,8 @@ const PostSong: React.FC = () => {
         mood,
         caption,
         audioFeatures, // Pass audio features
-        songObject // Pass complete song object
+        songObject, // Pass complete song object
+        mediaUrls // Pass media URLs
       );
       
       console.log('Post created successfully with ID:', postRef);
@@ -385,7 +414,9 @@ const PostSong: React.FC = () => {
       setCaption('');
       setMood('');
       setMoodCategory('');
-      setMediaFile(null);
+      setMediaFiles([]);
+      setMediaPreviews([]);
+      setCurrentPhotoIndex(0);
       setUploadProgress(0);
       
       // Force navigation with page refresh to ensure state sync
@@ -577,38 +608,67 @@ const PostSong: React.FC = () => {
           {/* Media Upload */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Add a photo (optional)
+              Add photos (max 5 photos)
             </label>
             
-            {!mediaPreview ? (
-              <div className="flex items-center justify-center p-6 border-2 border-dashed border-gray-300 dark:border-dark-400 rounded-md">
-                <label className="flex flex-col items-center cursor-pointer">
-                  <FaCamera className="h-8 w-8 text-gray-400" />
-                  <span className="mt-2 text-sm text-gray-500 dark:text-gray-400">Add a photo</span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    onChange={handleMediaChange}
-                  />
-                </label>
-              </div>
-            ) : (
+            <div className="flex items-center justify-center p-6 border-2 border-dashed border-gray-300 dark:border-dark-400 rounded-md">
+              <label className="flex flex-col items-center cursor-pointer">
+                <FaCamera className="h-8 w-8 text-gray-400" />
+                <span className="mt-2 text-sm text-gray-500 dark:text-gray-400">Add photos</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  multiple
+                  onChange={handleMediaChange}
+                />
+              </label>
+            </div>
+          </div>
+          
+          {/* Media Preview */}
+          {mediaPreviews.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Selected Photos ({currentPhotoIndex + 1}/{mediaPreviews.length})
+              </h3>
               <div className="relative">
                 <img
-                  src={mediaPreview}
-                  alt="Preview"
+                  src={mediaPreviews[currentPhotoIndex] || '/images/default-album.svg'}
+                  alt={`Photo ${currentPhotoIndex + 1}`}
                   className="w-full h-48 object-cover rounded-md"
                 />
+                
+                {/* Navigation arrows */}
+                {mediaPreviews.length > 1 && (
+                  <>
+                    <button
+                      className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full"
+                      onClick={() => setCurrentPhotoIndex(Math.max(0, currentPhotoIndex - 1))}
+                      disabled={currentPhotoIndex === 0}
+                    >
+                      <FaChevronLeft className="h-3 w-3" />
+                    </button>
+                    <button
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full"
+                      onClick={() => setCurrentPhotoIndex(Math.min(mediaPreviews.length - 1, currentPhotoIndex + 1))}
+                      disabled={currentPhotoIndex === mediaPreviews.length - 1}
+                    >
+                      <FaChevronRight className="h-3 w-3" />
+                    </button>
+                  </>
+                )}
+                
+                {/* Remove button */}
                 <button
                   className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full"
-                  onClick={handleRemoveMedia}
+                  onClick={() => handleRemoveMedia(currentPhotoIndex)}
                 >
-                  ✕
+                  <FaTimes className="h-3 w-3" />
                 </button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
           
           {/* Error message */}
           {error && (

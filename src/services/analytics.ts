@@ -11,6 +11,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { db } from '@/services/firebase';
+import { getPacificTime } from './timeUtils';
 
 // OpenAI Integration for Enhanced Analytics
 interface OpenAIAnalysisRequest {
@@ -207,7 +208,7 @@ export const generateWeeklyAnalytics = async (userId: string, weekStart?: Date):
       musicInsights,
       insights,
       recommendations,
-      generatedAt: new Date()
+      generatedAt: getPacificTime()
     };
 
     // Only include aiGeneratedInsights if it's not null
@@ -227,10 +228,10 @@ export const generateWeeklyAnalytics = async (userId: string, weekStart?: Date):
 };
 
 /**
- * Get the start of the current week (Monday)
+ * Get the start of the current week (Monday) in Pacific Time
  */
 const getWeekStart = (): Date => {
-  const now = new Date();
+  const now = getPacificTime();
   const day = now.getDay();
   const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday = 0
   return new Date(now.setDate(diff));
@@ -522,7 +523,7 @@ const generateRecommendations = (
 
   // Energy-based recommendations with seasonal awareness
   if (musicInsights.avgAudioFeatures.energy < 0.4) {
-    const currentMonth = new Date().getMonth();
+    const currentMonth = getPacificTime().getMonth();
     const isWinter = currentMonth === 11 || currentMonth === 0 || currentMonth === 1;
     
     if (isCurrentWeek && isWinter) {
@@ -544,7 +545,7 @@ const generateRecommendations = (
  * Check if a date is in the current week
  */
 const isDateInCurrentWeek = (date: Date): boolean => {
-  const now = new Date();
+  const now = getPacificTime();
   const currentWeekStart = getWeekStart();
   const currentWeekEnd = new Date(currentWeekStart);
   currentWeekEnd.setDate(currentWeekEnd.getDate() + 7);
@@ -675,7 +676,7 @@ export const getAvailableWeeksForMonth = (year: number, month: number): Date[] =
  * (Ensures the week has ended or is the current week)
  */
 export const canGenerateAnalyticsForWeek = (weekStartDate: Date): boolean => {
-  const now = new Date();
+  const now = getPacificTime();
   const weekEndDate = new Date(weekStartDate);
   weekEndDate.setDate(weekEndDate.getDate() + 7);
   

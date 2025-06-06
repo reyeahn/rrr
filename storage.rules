@@ -47,8 +47,8 @@ service firebase.storage {
                     isValidFileSize(2); // 2MB limit
     }
     
-    // Post media
-    match /posts/{userId}/{postId}/{fileName} {
+    // Post media - Updated to match actual upload path: posts/{userId}/{fileName}
+    match /posts/{userId}/{fileName} {
       // Anyone can view post media
       allow read: if isAuthenticated();
       

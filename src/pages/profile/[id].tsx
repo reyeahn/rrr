@@ -7,6 +7,7 @@ import { FaUser, FaUserPlus, FaUserMinus, FaHeart, FaRegHeart, FaComment } from 
 import { getUserProfilePosts, likePost, addComment, getPostComments } from '@/services/posts';
 import { sendFriendRequest, removeFriend, getUserFriends } from '@/services/friends';
 import ClickableAlbumCover from '@/components/spotify/ClickableAlbumCover';
+import PhotoCarousel from '@/components/PhotoCarousel';
 import { formatPostDate } from '@/services/timeUtils';
 
 interface Post {
@@ -24,6 +25,8 @@ interface Post {
   comments: number;
   createdAt: Date;
   likedBy?: string[];
+  mediaUrl?: string; // Keep for backward compatibility
+  mediaUrls?: string[]; // New field for multiple photos
 }
 
 interface UserData {
@@ -442,6 +445,27 @@ const UserProfile: React.FC = () => {
                         {post.caption && (
                           <p className="text-gray-700 dark:text-gray-300 mb-4">{post.caption}</p>
                         )}
+
+                        {/* Photo carousel if multiple photos exist, or single photo */}
+                        {(post.mediaUrls && post.mediaUrls.length > 0) ? (
+                          <div className="mb-4 rounded-lg overflow-hidden h-40">
+                            <PhotoCarousel
+                              mediaUrls={post.mediaUrls}
+                              className="w-full h-full rounded-lg"
+                              showCounter={true}
+                              counterPosition="top-right"
+                              showNavigation={true}
+                            />
+                          </div>
+                        ) : post.mediaUrl ? (
+                          <div className="mb-4 rounded-lg overflow-hidden">
+                            <img
+                              src={post.mediaUrl}
+                              alt="Attached media"
+                              className="w-full h-40 object-cover rounded-lg"
+                            />
+                          </div>
+                        ) : null}
 
                         <div className="flex items-center gap-6 mb-4">
                           {user && (

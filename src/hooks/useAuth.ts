@@ -11,9 +11,8 @@ import {
   resetPassword 
 } from '../services/auth';
 import { hasPostedToday as checkHasPostedToday } from '../services/timeUtils';
-
-// Import migration function
 import { migrateExistingMatches } from '../services/matches';
+import { getPacificTime } from '../services/timeUtils';
 
 export interface UserData {
   uid: string;
@@ -120,8 +119,8 @@ export const useAuth = (): AuthHook => {
             email: user.email,
             emailVerified: true,
             photoURL: user.photoURL,
-            createdAt: new Date(),
-            lastActive: new Date(),
+            createdAt: getPacificTime(),
+            lastActive: getPacificTime(),
             bio: '',
             onboardingCompleted: false,
             preferences: {

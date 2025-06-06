@@ -5,11 +5,15 @@ import {
   where, 
   getDocs, 
   doc, 
-  getDoc
+  getDoc,
+  orderBy,
+  limit,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { createMatch } from './matches';
 import { getActivePosts } from './posts';
+import { getPacificTime } from './timeUtils';
 
 export interface Swipe {
   id?: string;
@@ -36,7 +40,7 @@ export const recordSwipe = async (
       postId,
       postUserId,
       direction,
-      timestamp: new Date()
+      timestamp: getPacificTime()
     };
 
     await addDoc(collection(db, 'swipes'), swipeData);

@@ -7,6 +7,7 @@ import { FaHeart, FaTimes, FaPlay, FaPause, FaUser } from 'react-icons/fa';
 import { getUnswiped, recordSwipe } from '@/services/swipes';
 import { getIntelligentMatches } from '@/services/matchingAlgorithm';
 import ClickableAlbumCover from '@/components/spotify/ClickableAlbumCover';
+import PhotoCarousel from '@/components/PhotoCarousel';
 
 interface Post {
   id: string;
@@ -22,7 +23,8 @@ interface Post {
     previewUrl?: string;
   };
   caption: string;
-  mediaUrl?: string;
+  mediaUrl?: string; // Keep for backward compatibility
+  mediaUrls?: string[]; // New field for multiple photos
   audioFeatures?: {
     valence: number;
     energy: number;
@@ -72,8 +74,12 @@ const Discover: React.FC = () => {
       setIsLoading(true);
       
       try {
+        console.log('🔍 Starting intelligent matching for user:', user.uid);
+        
         // First try intelligent matching algorithm (max 15 posts per day)
         const intelligentMatches = await getIntelligentMatches(user.uid);
+        
+        console.log(`🎯 Intelligent matching returned ${intelligentMatches.length} matches`);
         
         if (intelligentMatches.length > 0) {
           // Convert to the format expected by the UI
@@ -99,12 +105,18 @@ const Discover: React.FC = () => {
                   previewUrl: match.song.previewUrl || ''
                 },
                 caption: match.caption || '',
-                mediaUrl: undefined,
+                mediaUrl: match.mediaUrl,
+                mediaUrls: match.mediaUrls,
                 audioFeatures: match.song.audioFeatures,
                 moodTags: match.moodTags || [match.mood]
               });
-            } catch (err) {
-              console.error(`Error processing intelligent match ${match.id}:`, err);
+            } catch (err: any) {
+              // Handle individual post processing errors gracefully
+              if (err.message?.includes('ERR_BLOCKED_BY_CLIENT') || err.toString().includes('blocked')) {
+                console.warn(`⚠️ Post ${match.id} blocked by ad blocker - skipping`);
+              } else {
+                console.error(`Error processing intelligent match ${match.id}:`, err);
+              }
             }
           }
           
@@ -168,14 +180,25 @@ const Discover: React.FC = () => {
                 moodTags: postData.moodTags || []
               });
             }
-          } catch (err) {
-            console.error(`Error fetching post ${postId}:`, err);
+          } catch (err: any) {
+            // Handle individual post fetch errors gracefully
+            if (err.message?.includes('ERR_BLOCKED_BY_CLIENT') || err.toString().includes('blocked')) {
+              console.warn(`⚠️ Post ${postId} blocked by ad blocker - skipping`);
+            } else {
+              console.error(`Error fetching post ${postId}:`, err);
+            }
           }
         }
         
         setPosts(fetchedPosts);
-      } catch (error) {
-        console.error('Error fetching posts:', error);
+      } catch (error: any) {
+        // Handle overall fetch errors with specific messaging for blocking
+        if (error.message?.includes('ERR_BLOCKED_BY_CLIENT') || error.toString().includes('blocked')) {
+          console.warn('⚠️ Discover feed blocked by ad blocker - showing empty state');
+          console.info('💡 To fix this: Try disabling ad blockers or use an incognito window');
+        } else {
+          console.error('Error fetching posts:', error);
+        }
         setPosts([]);
       } finally {
         setIsLoading(false);
@@ -353,17 +376,30 @@ const Discover: React.FC = () => {
           <FaHeart className="h-10 w-10 text-primary-600" />
         </div>
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-          You've seen all posts for today!
+          {posts.length === 0 ? "No new posts available" : "You've seen all posts for today!"}
         </h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-6">
-          Come back tomorrow to discover more music connections.
+        <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-sm">
+          {posts.length === 0 
+            ? "You've already interacted with all available posts. Check back later for new music from the community!"
+            : "Come back tomorrow to discover more music connections."
+          }
         </p>
-        <button
-          className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
-          onClick={() => router.push('/matches')}
-        >
-          Go to Matches
-        </button>
+        <div className="space-y-3">
+          <button
+            className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 block"
+            onClick={() => router.push('/matches')}
+          >
+            Go to Matches
+          </button>
+          {posts.length === 0 && (
+            <button
+              className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 block"
+              onClick={() => window.location.reload()}
+            >
+              Refresh Feed
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -476,8 +512,18 @@ const Discover: React.FC = () => {
               </div>
             )}
             
-            {/* Media attachment if exists */}
-            {currentPost.mediaUrl && (
+            {/* Photo carousel if multiple photos exist, or single photo */}
+            {(currentPost.mediaUrls && currentPost.mediaUrls.length > 0) ? (
+              <div className="mt-3 rounded-lg overflow-hidden h-48">
+                <PhotoCarousel
+                  mediaUrls={currentPost.mediaUrls}
+                  className="w-full h-full rounded-lg"
+                  showCounter={true}
+                  counterPosition="top-right"
+                  showNavigation={true}
+                />
+              </div>
+            ) : currentPost.mediaUrl ? (
               <div className="mt-3 rounded-lg overflow-hidden">
                 <img
                   src={currentPost.mediaUrl}
@@ -485,7 +531,7 @@ const Discover: React.FC = () => {
                   className="w-full h-auto"
                 />
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

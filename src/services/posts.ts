@@ -14,7 +14,7 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { getLastResetTime, isAfterLastReset } from './timeUtils';
+import { getLastResetTime, isAfterLastReset, getPacificTime } from './timeUtils';
 
 export interface Post {
   id: string;
@@ -32,6 +32,8 @@ export interface Post {
   comments: number;
   createdAt: Date;
   likedBy?: string[];
+  mediaUrl?: string; // Keep for backward compatibility
+  mediaUrls?: string[]; // New field for multiple photos
   song?: {
     title: string;
     artist: string;
@@ -238,7 +240,8 @@ export const createPost = async (
     previewUrl?: string;
     audioFeatures?: any;
     genres?: string[];
-  }
+  },
+  mediaUrls?: string[] // Add support for multiple media URLs
 ): Promise<string> => {
   try {
     // Create the post document with required fields
@@ -253,8 +256,8 @@ export const createPost = async (
       caption,
       likes: 0,
       comments: 0,
-      createdAt: Timestamp.fromDate(new Date()),
-      updatedAt: Timestamp.fromDate(new Date()),
+      createdAt: Timestamp.fromDate(getPacificTime()),
+      updatedAt: Timestamp.fromDate(getPacificTime()),
       moodTags: [mood] // Add mood tags array for better analytics
     };
     
@@ -265,6 +268,13 @@ export const createPost = async (
     
     if (previewUrl) {
       postData.previewUrl = previewUrl;
+    }
+    
+    // Add media URLs if they exist
+    if (mediaUrls && mediaUrls.length > 0) {
+      postData.mediaUrls = mediaUrls;
+      // Keep the old single mediaUrl for backward compatibility
+      postData.mediaUrl = mediaUrls[0];
     }
     
     // Add audio features at the top level (for backward compatibility)
@@ -412,7 +422,7 @@ export const addComment = async (
       postId,
       userId,
       content,
-      createdAt: Timestamp.fromDate(new Date())
+      createdAt: Timestamp.fromDate(getPacificTime())
     });
 
     // Update post comment count
@@ -554,7 +564,9 @@ export const getMatchFeedPosts = async (userId: string): Promise<Post[]> => {
       likes: matchedPost.likes,
       comments: matchedPost.comments,
       createdAt: matchedPost.createdAt,
-      likedBy: []
+      likedBy: [],
+      mediaUrl: matchedPost.mediaUrl, // Include single photo
+      mediaUrls: matchedPost.mediaUrls // Include multiple photos
     }));
     
     return posts;
@@ -570,8 +582,8 @@ export const getMatchFeedPosts = async (userId: string): Promise<Post[]> => {
 export const getUserProfilePosts = async (userId: string): Promise<Post[]> => {
   try {
     // Get start of current month (Pacific Time)
-    const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const pacificNow = getPacificTime();
+    const currentMonthStart = new Date(pacificNow.getFullYear(), pacificNow.getMonth(), 1);
     
     const postsQuery = query(
       collection(db, 'posts'),
@@ -605,9 +617,9 @@ export const getUserArchivedPosts = async (userId: string): Promise<{
   [monthYear: string]: Post[]
 }> => {
   try {
-    // Get start of current month
-    const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    // Get start of current month (Pacific Time)
+    const pacificNow = getPacificTime();
+    const currentMonthStart = new Date(pacificNow.getFullYear(), pacificNow.getMonth(), 1);
     
     const postsQuery = query(
       collection(db, 'posts'),

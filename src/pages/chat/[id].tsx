@@ -121,8 +121,8 @@ const ChatPage: React.FC = () => {
                   
                   setOtherUser({
                     id: otherUserId,
-                    name: matchData.userNames[otherUserId] || 'User',
-                    photoURL: matchData.userPhotos[otherUserId] || null
+                    name: matchData.users?.[otherUserId]?.displayName || 'User',
+                    photoURL: matchData.users?.[otherUserId]?.photoURL || null
                   });
                 } else {
                   console.error('Failed to create conversation from match');
