@@ -610,6 +610,34 @@ export const getUserProfilePosts = async (userId: string): Promise<Post[]> => {
 };
 
 /**
+ * Get ALL user's posts ever for total count and stats
+ */
+export const getAllUserPosts = async (userId: string): Promise<Post[]> => {
+  try {
+    const postsQuery = query(
+      collection(db, 'posts'),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+
+    const snapshot = await getDocs(postsQuery);
+    const posts: Post[] = [];
+
+    snapshot.forEach((doc) => {
+      posts.push({
+        id: doc.id,
+        ...doc.data()
+      } as Post);
+    });
+
+    return posts;
+  } catch (error) {
+    console.error('Error fetching all user posts:', error);
+    return [];
+  }
+};
+
+/**
  * Get user's archived posts (posts older than current month)
  * Returns posts grouped by month
  */
@@ -638,7 +666,7 @@ export const getUserArchivedPosts = async (userId: string): Promise<{
       } as Post;
       
       // Group by month-year
-      const postDate = post.createdAt instanceof Date ? post.createdAt : post.createdAt.toDate();
+      const postDate = post.createdAt instanceof Date ? post.createdAt : (post.createdAt as any).toDate();
       const monthYear = `${postDate.getFullYear()}-${String(postDate.getMonth() + 1).padStart(2, '0')}`;
       
       if (!archivedPosts[monthYear]) {

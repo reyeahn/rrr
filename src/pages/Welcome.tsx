@@ -90,16 +90,19 @@ const Welcome: React.FC = () => {
         <div className="text-center mb-8">
           {/* Logo */}
           <div className="flex justify-center mb-6">
-            <div className="w-20 h-20 rounded-full bg-primary-600 flex items-center justify-center">
-              {/* Replace with your actual logo */}
-              <span className="text-3xl font-bold text-white">MC</span>
+            <div className="w-40 h-40 flex items-center justify-center">
+              <img 
+                src="/images/logo_ry_3.png" 
+                alt="Resonate Logo" 
+                className="w-full h-full object-contain"
+              />
             </div>
           </div>
-          <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">
-            MusicConnect
+          <h1 className="text-5xl font-display text-gray-900 dark:text-white">
+            Resonate
           </h1>
           <p className="mt-2 text-lg text-gray-600 dark:text-gray-400">
-            Connect with others through the music you love
+            Connect with others through music!
           </p>
         </div>
 

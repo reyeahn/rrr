@@ -56,7 +56,7 @@ function MyApp({ Component, pageProps }: AppProps) {
 
   return (
     <div className={theme === 'dark' ? 'dark' : 'light'}>
-      <AppLayout hideNav={hideNav || isPublicRoute} title="MusicConnect">
+      <AppLayout hideNav={hideNav || isPublicRoute} title="Resonate">
         <Component {...pageProps} toggleTheme={toggleTheme} />
       </AppLayout>
     </div>

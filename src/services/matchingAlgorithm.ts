@@ -176,8 +176,8 @@ const calculateTextSimilarity = (text1: string, text2: string): number => {
   const words1 = new Set(text1.split(/\s+/).filter(word => word.length > 2));
   const words2 = new Set(text2.split(/\s+/).filter(word => word.length > 2));
   
-  const intersection = new Set([...words1].filter(x => words2.has(x)));
-  const union = new Set([...words1, ...words2]);
+  const intersection = new Set(Array.from(words1).filter(x => words2.has(x)));
+  const union = new Set(Array.from(words1).concat(Array.from(words2)));
   
   return union.size === 0 ? 0 : intersection.size / union.size;
 };
@@ -256,9 +256,9 @@ export const updateUserMusicPreferences = async (userId: string): Promise<void> 
 
     // Calculate average preferences from liked content
     const preferences = {
-      genres: [...new Set(genres)],
+      genres: Array.from(new Set(genres)),
       audioFeatures: calculateAverageAudioFeatures(audioFeatures),
-      moodTags: [...new Set(moodTags)]
+      moodTags: Array.from(new Set(moodTags))
     };
 
     console.log(`📊 Calculated preferences:`, {
@@ -408,7 +408,7 @@ export const getIntelligentMatches = async (userId: string): Promise<PostWithMet
     });
 
     // Combine friends and matched users to exclude from discover
-    const excludedUserIds = [...new Set([...userFriends, ...matchedUserIds])];
+    const excludedUserIds = Array.from(new Set(userFriends.concat(matchedUserIds)));
     console.log(`Excluding ${excludedUserIds.length} users from discover (friends + matches)`);
 
     // Get posts that haven't been swiped yet
@@ -565,8 +565,8 @@ const calculateMoodCompatibility = (user: UserProfile, postData: any): number =>
   
   if (userMoodTags.length === 0 || postMoodTags.length === 0) return 0.5;
   
-  const commonMoods = userMoodTags.filter(mood => 
-    postMoodTags.some(postMood => 
+  const commonMoods = userMoodTags.filter(mood =>
+    postMoodTags.some((postMood: string) =>
       mood.toLowerCase() === postMood.toLowerCase()
     )
   );

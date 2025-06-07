@@ -4,8 +4,9 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db, handleFirestoreError } from '@/services/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { FaUser, FaCog, FaEdit, FaSignOutAlt, FaMusic, FaHeart, FaComment, FaRegHeart, FaLock, FaGlobe, FaChartLine, FaPhone } from 'react-icons/fa';
-import { getUserProfilePosts } from '@/services/posts';
+import { getUserProfilePosts, getAllUserPosts } from '@/services/posts';
 import { likePost, addComment, getPostComments } from '@/services/posts';
+import { getUserFriends } from '@/services/friends';
 import NotificationBadge from '@/components/common/NotificationBadge';
 import { getUnreadNotifications } from '@/services/notifications';
 import ClickableAlbumCover from '@/components/spotify/ClickableAlbumCover';
@@ -49,6 +50,8 @@ const Profile: React.FC = () => {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [postsVisibility, setPostsVisibility] = useState<'public' | 'private'>('public');
   const [activeTab, setActiveTab] = useState<'posts' | 'analytics'>('posts');
+  const [friendCount, setFriendCount] = useState(0);
+  const [totalPostsCount, setTotalPostsCount] = useState(0);
 
   useEffect(() => {
     if (userData) {
@@ -62,6 +65,8 @@ const Profile: React.FC = () => {
     if (user) {
       fetchUserPosts();
       fetchNotifications();
+      fetchFriendCount();
+      fetchTotalPostsCount();
     }
   }, [user]);
 
@@ -121,6 +126,30 @@ const Profile: React.FC = () => {
       console.error('Error fetching notifications:', error);
       // Fallback to a default value
       setUnreadNotifications(0);
+    }
+  };
+
+  const fetchFriendCount = async () => {
+    if (!user) return;
+    
+    try {
+      const friends = await getUserFriends(user.uid);
+      setFriendCount(friends.length);
+    } catch (error) {
+      console.error('Error fetching friend count:', error);
+      setFriendCount(0);
+    }
+  };
+
+  const fetchTotalPostsCount = async () => {
+    if (!user) return;
+    
+    try {
+      const totalPosts = await getAllUserPosts(user.uid);
+      setTotalPostsCount(totalPosts.length);
+    } catch (error) {
+      console.error('Error fetching total posts count:', error);
+      setTotalPostsCount(0);
     }
   };
 
@@ -364,47 +393,12 @@ const Profile: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-light-100 dark:bg-dark-100 pb-16">
-      {/* User Profile Header */}
-      <div className="bg-white dark:bg-dark-200 p-4 shadow-sm">
-        <div className="max-w-md mx-auto">
-          <div className="flex items-center">
-            <div className="relative">
-              {userData?.photoURL ? (
-                <img 
-                  src={userData.photoURL} 
-                  alt={userData.displayName || 'User'} 
-                  className="w-16 h-16 rounded-full object-cover"
-                />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-gray-300 dark:bg-dark-300 flex items-center justify-center">
-                  <FaUser className="text-gray-500 dark:text-dark-500 text-2xl" />
-                </div>
-              )}
-            </div>
-            
-            <div className="ml-4 flex-grow">
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full p-2 border border-gray-300 dark:border-dark-400 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white mb-2"
-                  placeholder="Your name"
-                />
-              ) : (
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                  {userData?.displayName || user?.displayName || 'Your Profile'}
-                </h1>
-              )}
-              
-              <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
-                <span>{posts.length} posts</span>
-                <span>·</span>
-                <span>0 friends</span>
-              </div>
-            </div>
-            
+    <div className="min-h-screen bg-light-100 dark:bg-dark-100 pt-16 pb-20 px-4">
+      <div className="max-w-lg mx-auto">
+        {/* Profile Header */}
+        <div className="bg-white dark:bg-dark-200 rounded-lg shadow-md p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">My Profile</h1>
             <div className="flex items-center space-x-2">
               {isEditing ? (
                 <button 
@@ -433,75 +427,100 @@ const Profile: React.FC = () => {
             </div>
           </div>
           
-          {isEditing ? (
-            <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              className="w-full mt-4 p-2 border border-gray-300 dark:border-dark-400 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white"
-              placeholder="Write a short bio about yourself..."
-              rows={3}
-            />
-          ) : (
-            <p className="mt-4 text-gray-700 dark:text-gray-300">
-              {userData?.bio || 'No bio yet'}
-            </p>
-          )}
-
-          {/* Stats section */}
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-            <div className="bg-gray-100 dark:bg-dark-300 rounded-lg p-2">
-              <div className="text-primary-600 dark:text-primary-400 text-lg font-bold">
-                {userData?.stats?.totalPosts || posts.length}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">Posts</div>
+          <div className="flex items-center mb-4">
+            <div className="relative mr-4">
+              {userData?.photoURL ? (
+                <img
+                  src={userData.photoURL} 
+                  alt={userData.displayName || 'User'} 
+                  className="w-20 h-20 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
+                  <FaUser className="h-10 w-10 text-primary-600 dark:text-primary-400" />
+                </div>
+              )}
             </div>
-            <div className="bg-gray-100 dark:bg-dark-300 rounded-lg p-2">
-              <div className="text-primary-600 dark:text-primary-400 text-lg font-bold">
-                {userData?.stats?.totalMatches || 0}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">Matches</div>
+            
+            <div className="flex-1">
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full p-2 border border-gray-300 dark:border-dark-400 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white mb-2"
+                  placeholder="Your name"
+                />
+              ) : (
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  {userData?.displayName || user?.displayName || 'Your Profile'}
+                </h2>
+              )}
             </div>
-            <div className="bg-gray-100 dark:bg-dark-300 rounded-lg p-2">
-              <div className="text-primary-600 dark:text-primary-400 text-lg font-bold">
-                {userData?.stats?.totalLikes || 0}
+          </div>
+          
+          {/* Bio */}
+          <div className="mb-4">
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Bio</h3>
+            {isEditing ? (
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                className="w-full p-2 border border-gray-300 dark:border-dark-400 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white"
+                placeholder="Write a short bio about yourself..."
+                rows={3}
+              />
+            ) : (
+              <p className="text-gray-600 dark:text-gray-400">
+                {userData?.bio || 'No bio yet'}
+              </p>
+            )}
+          </div>
+          
+          {/* Stats Card */}
+          <div className="mt-6">
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Stats</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="text-center p-3 bg-light-100 dark:bg-dark-100 rounded-lg">
+                <p className="text-2xl font-bold text-primary-600">{totalPostsCount}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Posts</p>
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">Likes</div>
+              <div className="text-center p-3 bg-light-100 dark:bg-dark-100 rounded-lg">
+                <p className="text-2xl font-bold text-primary-600">{friendCount}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Friends</p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      
-      {/* Posts and Analytics Container - Match header width */}
-      <div className="max-w-md mx-auto px-4">
+
+        {/* Posts */}
         <div className="bg-white dark:bg-dark-200 rounded-lg shadow-md p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Your Content</h2>
-          </div>
-          
-          {/* Tab Navigation */}
-          <div className="flex space-x-1 mb-6">
-            <button
-              onClick={() => setActiveTab('posts')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'posts'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 dark:bg-dark-300 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-400'
-              }`}
-            >
-              <FaMusic className="inline mr-2" />
-              Posts
-            </button>
-            <button
-              onClick={() => setActiveTab('analytics')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'analytics'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 dark:bg-dark-300 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-400'
-              }`}
-            >
-              <FaChartLine className="inline mr-2" />
-              Analytics
-            </button>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Posts</h2>
+            
+            {/* Tab Navigation */}
+            <div className="flex space-x-1">
+              <button
+                onClick={() => setActiveTab('posts')}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  activeTab === 'posts'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 dark:bg-dark-300 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-400'
+                }`}
+              >
+                Posts
+              </button>
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  activeTab === 'analytics'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 dark:bg-dark-300 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-400'
+                }`}
+              >
+                Analytics
+              </button>
+            </div>
           </div>
 
           {/* Posts Tab Content */}
@@ -526,42 +545,35 @@ const Profile: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-1">
-                  {posts.map((post) => (
-                    <div
-                      key={post.id}
-                      className="aspect-square bg-gray-700 rounded-lg overflow-hidden relative group cursor-pointer"
-                      onClick={() => setSelectedPost(selectedPost === post.id ? null : post.id)}
-                    >
-                      <ClickableAlbumCover
-                        coverArtUrl={post.songAlbumArt}
-                        previewUrl={post.previewUrl}
-                        songTitle={post.songTitle}
-                        songArtist={post.songArtist}
-                        size="large"
-                        className="w-full h-full"
-                      />
-                      {/* Hover overlay */}
-                      <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center">
-                        <div className="text-white text-center px-2">
-                          <p className="text-xs font-medium truncate mb-1">{post.songTitle}</p>
-                          <p className="text-xs text-gray-300 truncate mb-2">{post.songArtist}</p>
-                          <p className="text-xs text-gray-300 mb-2">{formatPostDate(post.createdAt)}</p>
-                          <div className="flex items-center space-x-4 text-xs">
-                            <div className="flex items-center">
-                              <FaHeart className="mr-1" />
-                              <span>{post.likes}</span>
-                            </div>
-                            <div className="flex items-center">
-                              <FaComment className="mr-1" />
-                              <span>{post.comments}</span>
-                            </div>
+                <>
+                  {/* Gallery Grid */}
+                  <div className="grid grid-cols-3 gap-2 mb-6">
+                    {posts.map((post) => (
+                      <div
+                        key={post.id}
+                        className="aspect-square bg-gray-700 rounded-lg overflow-hidden relative group cursor-pointer"
+                        onClick={() => setSelectedPost(selectedPost === post.id ? null : post.id)}
+                      >
+                        <ClickableAlbumCover
+                          coverArtUrl={post.songAlbumArt}
+                          previewUrl={post.previewUrl}
+                          songTitle={post.songTitle}
+                          songArtist={post.songArtist}
+                          size="large"
+                          className="w-full h-full"
+                        />
+                        {/* Hover overlay */}
+                        <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                          <div className="text-white text-center">
+                            <p className="text-xs font-medium truncate px-2">{post.songTitle}</p>
+                            <p className="text-xs text-gray-300 truncate px-2">{post.songArtist}</p>
+                            <p className="text-xs text-gray-300 px-2 mt-1">{formatPostDate(post.createdAt)}</p>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                </>
               )}
             </>
           )}
@@ -573,46 +585,53 @@ const Profile: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Logout Button */}
+        <div className="bg-white dark:bg-dark-200 rounded-lg shadow-md p-6">
+          <button
+            onClick={handleLogout}
+            className="w-full py-3 flex items-center justify-center text-red-600 dark:text-red-400 bg-white dark:bg-dark-200 rounded-lg shadow-md border border-gray-200 dark:border-dark-300"
+          >
+            <FaSignOutAlt className="mr-2" />
+            <span>Logout</span>
+          </button>
+        </div>
       </div>
 
-      {/* Expanded Post View */}
-      {selectedPost && (
+      {/* Post Detail Modal */}
+      {selectedPost && posts.find(p => p.id === selectedPost) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-dark-200 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
             {(() => {
-              const post = posts.find(p => p.id === selectedPost);
-              if (!post) return null;
-              
+              const post = posts.find(p => p.id === selectedPost)!;
               return (
                 <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                      {post.songTitle}
-                    </h3>
+                  {/* Close button */}
+                  <div className="flex justify-end mb-4">
                     <button
                       onClick={() => setSelectedPost(null)}
-                      className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                      className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                     >
-                      ✕
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </div>
-                  
+
+                  {/* Post content */}
                   <div className="flex gap-4 mb-4">
-                    <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-700">
-                      <ClickableAlbumCover
-                        coverArtUrl={post.songAlbumArt}
-                        previewUrl={post.previewUrl}
-                        songTitle={post.songTitle}
-                        songArtist={post.songArtist}
-                        size="large"
-                        className="w-full h-full"
-                      />
-                    </div>
+                    <ClickableAlbumCover
+                      coverArtUrl={post.songAlbumArt}
+                      previewUrl={post.previewUrl}
+                      songTitle={post.songTitle}
+                      songArtist={post.songArtist}
+                      size="large"
+                    />
                     <div className="flex-1">
-                      <h4 className="text-gray-900 dark:text-white font-semibold">
+                      <h3 className="text-gray-900 dark:text-white font-semibold text-lg">
                         {post.songTitle}
-                      </h4>
-                      <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      </h3>
+                      <p className="text-gray-500 dark:text-gray-400">
                         {post.songArtist}
                       </p>
                       <p className="text-primary-600 dark:text-primary-400 text-sm mt-1">
@@ -672,33 +691,40 @@ const Profile: React.FC = () => {
 
                   {showComments[post.id] && (
                     <div className="space-y-4">
-                      {comments[post.id]?.map((comment) => (
-                        <div key={comment.id} className="flex gap-3">
-                          <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-700">
-                            {comment.userPhotoURL ? (
-                              <img
-                                src={comment.userPhotoURL}
-                                alt={comment.userDisplayName}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="h-full w-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
-                                <FaUser className="h-3 w-3 text-primary-600 dark:text-primary-400" />
+                      {comments[post.id]?.length > 0 ? (
+                        comments[post.id].map((comment) => (
+                          <div key={comment.id} className="flex gap-3">
+                            <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-700">
+                              {comment.userPhotoURL ? (
+                                <img
+                                  src={comment.userPhotoURL}
+                                  alt={comment.userDisplayName}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="h-full w-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
+                                  <FaUser className="h-3 w-3 text-primary-600 dark:text-primary-400" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="bg-gray-100 dark:bg-dark-300 rounded-lg p-3">
+                                <p className="text-gray-900 dark:text-white font-semibold text-sm">
+                                  {comment.userDisplayName}
+                                </p>
+                                <p className="text-gray-700 dark:text-gray-300 text-sm">
+                                  {comment.content}
+                                </p>
                               </div>
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <div className="bg-gray-100 dark:bg-dark-300 rounded-lg p-3">
-                              <p className="text-gray-900 dark:text-white font-semibold text-sm">
-                                {comment.userDisplayName}
-                              </p>
-                              <p className="text-gray-700 dark:text-gray-300 text-sm">
-                                {comment.content}
+                              <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
+                                {formatPostDate(comment.createdAt)}
                               </p>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      ) : (
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">No comments yet</p>
+                      )}
 
                       <div className="flex gap-3">
                         <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-700">
@@ -744,17 +770,6 @@ const Profile: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Logout Button */}
-      <div className="max-w-md mx-auto px-4 mb-20">
-        <button
-          onClick={handleLogout}
-          className="w-full py-3 flex items-center justify-center text-red-600 dark:text-red-400 bg-white dark:bg-dark-200 rounded-lg shadow-md"
-        >
-          <FaSignOutAlt className="mr-2" />
-          <span>Logout</span>
-        </button>
-      </div>
     </div>
   );
 };

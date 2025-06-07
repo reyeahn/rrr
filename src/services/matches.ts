@@ -219,7 +219,11 @@ export const getMatchedUsersPosts = async (userId: string): Promise<MatchedUserP
           caption: post.caption,
           likes: post.likes,
           comments: post.comments,
-          createdAt: post.createdAt?.toDate?.() || post.createdAt,
+          createdAt: post.createdAt && typeof (post.createdAt as any).toDate === 'function' 
+            ? (post.createdAt as any).toDate() 
+            : post.createdAt instanceof Date 
+              ? post.createdAt 
+              : new Date(post.createdAt),
           matchId: match.id,
           matchedAt: match.createdAt,
           mediaUrl: post.mediaUrl,

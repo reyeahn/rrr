@@ -209,7 +209,6 @@ export class MatchingAlgorithmTester {
  */
 export const quickTestMatching = async (userId: string) => {
   console.log(`Quick test for user: ${userId}`);
-  const tester = new MatchingAlgorithmTester();
-  await tester.testCompatibilityScoring(userId);
-  await tester.testDailyLimit(userId);
+  await MatchingAlgorithmTester.testCompatibilityScoring(userId);
+  await MatchingAlgorithmTester.testDailyLimit(userId);
 }; 

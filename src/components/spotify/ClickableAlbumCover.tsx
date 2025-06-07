@@ -104,13 +104,23 @@ const ClickableAlbumCover: React.FC<ClickableAlbumCoverProps> = ({
   }, [audio]);
 
   const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent event bubbling
-    
     if (!previewUrl || !audio) {
       console.log('No preview URL available for', songTitle);
+      // Don't stop propagation when there's no preview - allow parent click handlers to work
       return;
     }
 
+    // Don't stop propagation by default - let the post selection work
+    // Only stop propagation if we're actually playing/pausing audio
+  };
+
+  const handlePlayButtonClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent event bubbling for play button
+    
+    if (!previewUrl || !audio) {
+      return;
+    }
+    
     if (isPlaying) {
       audio.pause();
       setIsPlaying(false);
@@ -151,7 +161,10 @@ const ClickableAlbumCover: React.FC<ClickableAlbumCoverProps> = ({
             isHovered || isPlaying ? 'opacity-100' : 'opacity-0'
           }`}
         >
-          <div className="bg-white bg-opacity-90 rounded-full p-2 hover:bg-opacity-100 transition-all duration-200 transform hover:scale-110">
+          <div 
+            className="bg-white bg-opacity-90 rounded-full p-2 hover:bg-opacity-100 transition-all duration-200 transform hover:scale-110"
+            onClick={handlePlayButtonClick}
+          >
             {isPlaying ? (
               <FaPause 
                 className="text-gray-800" 

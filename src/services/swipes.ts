@@ -138,7 +138,7 @@ export const getUnswiped = async (userId: string): Promise<string[]> => {
     });
 
     // Combine friends and matched users to exclude from discover
-    const excludedUserIds = [...new Set([...userFriends, ...matchedUserIds])];
+    const excludedUserIds = Array.from(new Set(userFriends.concat(matchedUserIds)));
     console.log(`getUnswiped: Excluding ${excludedUserIds.length} users (friends + matches)`);
 
     // Get all posts the user has swiped on

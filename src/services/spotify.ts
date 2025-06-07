@@ -292,11 +292,13 @@ const generatePlaceholderAudioFeatures = (trackId: string, mood?: string, genre?
   
   // Ensure values are within valid ranges
   return {
+    id: trackId,
     valence: Math.max(0, Math.min(1, valence)),
     energy: Math.max(0, Math.min(1, energy)),
     danceability: Math.max(0, Math.min(1, danceability)),
     acousticness: Math.max(0, Math.min(1, acousticness)),
     tempo: Math.max(60, Math.min(200, tempo)),
+    duration_ms: 180000, // Default to 3 minutes
     
     // Additional Spotify audio features (reasonable defaults)
     key: Math.floor(random() * 12), // 0-11 (C, C#, D, etc.)

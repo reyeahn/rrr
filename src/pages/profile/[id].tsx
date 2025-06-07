@@ -4,7 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { FaUser, FaUserPlus, FaUserMinus, FaHeart, FaRegHeart, FaComment } from 'react-icons/fa';
-import { getUserProfilePosts, likePost, addComment, getPostComments } from '@/services/posts';
+import { getUserProfilePosts, likePost, addComment, getPostComments, getAllUserPosts } from '@/services/posts';
 import { sendFriendRequest, removeFriend, getUserFriends } from '@/services/friends';
 import ClickableAlbumCover from '@/components/spotify/ClickableAlbumCover';
 import PhotoCarousel from '@/components/PhotoCarousel';
@@ -36,7 +36,7 @@ interface UserData {
   bio: string;
   stats?: {
     totalPosts: number;
-    totalMatches: number;
+    totalFriends: number;
   };
   settings?: {
     postsVisibility?: 'public' | 'private';
@@ -55,11 +55,15 @@ const UserProfile: React.FC = () => {
   const [showComments, setShowComments] = useState<{[key: string]: boolean}>({});
   const [friendship, setFriendship] = useState<'not_friend' | 'pending' | 'friends'>('not_friend');
   const [selectedPost, setSelectedPost] = useState<string | null>(null);
+  const [friendCount, setFriendCount] = useState(0);
+  const [totalPostsCount, setTotalPostsCount] = useState(0);
 
   useEffect(() => {
     if (id && typeof id === 'string') {
       fetchUserData(id);
       fetchUserPosts(id);
+      fetchUserFriendCount(id);
+      fetchTotalPostsCount(id);
       if (user) {
         checkFriendshipStatus(id);
       }
@@ -255,6 +259,26 @@ const UserProfile: React.FC = () => {
     setShowComments(prev => ({ ...prev, [postId]: !prev[postId] }));
   };
 
+  const fetchUserFriendCount = async (userId: string) => {
+    try {
+      const friends = await getUserFriends(userId);
+      setFriendCount(friends.length);
+    } catch (error) {
+      console.error('Error fetching user friend count:', error);
+      setFriendCount(0);
+    }
+  };
+
+  const fetchTotalPostsCount = async (userId: string) => {
+    try {
+      const totalPosts = await getAllUserPosts(userId);
+      setTotalPostsCount(totalPosts.length);
+    } catch (error) {
+      console.error('Error fetching total posts count:', error);
+      setTotalPostsCount(0);
+    }
+  };
+
   if (loading || !userData) {
     return (
       <div className="min-h-screen bg-light-100 dark:bg-dark-100 flex items-center justify-center">
@@ -320,9 +344,6 @@ const UserProfile: React.FC = () => {
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                 {userData.displayName || 'User'}
               </h2>
-              {userData.email && (
-                <p className="text-sm text-gray-600 dark:text-gray-400">{userData.email}</p>
-              )}
             </div>
           </div>
           
@@ -339,12 +360,12 @@ const UserProfile: React.FC = () => {
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Stats</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-3 bg-light-100 dark:bg-dark-100 rounded-lg">
-                <p className="text-2xl font-bold text-primary-600">{userData.stats?.totalPosts || 0}</p>
+                <p className="text-2xl font-bold text-primary-600">{totalPostsCount}</p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Posts</p>
               </div>
               <div className="text-center p-3 bg-light-100 dark:bg-dark-100 rounded-lg">
-                <p className="text-2xl font-bold text-primary-600">{userData.stats?.totalMatches || 0}</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Matches</p>
+                <p className="text-2xl font-bold text-primary-600">{friendCount}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Friends</p>
               </div>
             </div>
           </div>

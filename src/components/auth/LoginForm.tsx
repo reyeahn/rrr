@@ -56,7 +56,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
   return (
     <div className="w-full max-w-md space-y-6">
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Welcome back</h2>
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Welcome back!</h2>
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
           Sign in to your account to continue
         </p>
