@@ -79,8 +79,8 @@ const SignupForm: React.FC<SignupFormProps> = ({
           name="name"
           type="text"
           autoComplete="name"
-          label="Full Name"
-          placeholder="John Doe"
+          label="Username"
+          placeholder="Enter your username"
           leftIcon={<FaUser className="h-5 w-5 text-gray-400" />}
           value={formik.values.name}
           onChange={formik.handleChange}
